@@ -113,12 +113,14 @@ describe("Skills.tsx — Install button (issue #310 diagnosis)", () => {
       expect(listInstalledSkills).toHaveBeenCalled();
     });
 
-    const browseTab = view.container.querySelectorAll(
-      ".skills-tab",
-    )[1] as HTMLButtonElement;
-    expect(browseTab).toBeTruthy();
+    let browseTab: HTMLButtonElement | null = null;
+    await waitFor(() => {
+      const tabs = view.container.querySelectorAll(".skills-tab");
+      browseTab = tabs[1] as HTMLButtonElement;
+      expect(browseTab).toBeTruthy();
+    });
     await act(async () => {
-      fireEvent.click(browseTab);
+      fireEvent.click(browseTab!);
     });
 
     let installBtn: HTMLButtonElement | null = null;
