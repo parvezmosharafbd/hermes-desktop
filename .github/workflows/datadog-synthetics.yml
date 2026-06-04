@@ -32,8 +32,8 @@ jobs:
       if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.repository == github.event.pull_request.head.repo.full_name) }}
       uses: DataDog/synthetics-ci-github-action@87b505388a22005bb8013481e3f73a367b9a53eb # v1.4.0
       with:
-        api_key: 79e35139f5ebdf56f01c7158a66514ec
-        app_key: ddapp_GNFCE6uhCdW2BNwKHD2yXEMHzEcU3wseyp
+        api_key: ${{ secrets.DD_API_KEY }}
+        app_key: ${{ secrets.DD_APP_KEY }}
         test_search_query: 'tag:e2e-tests' #Modify this tag to suit your tagging strategy
 
 
