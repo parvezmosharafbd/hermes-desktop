@@ -10,7 +10,7 @@ import {
   session,
 } from "electron";
 import { join, extname } from "path";
-import { readdir, readFile } from "fs/promises";
+import { readdir, readFile, stat } from "fs/promises";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import type { AppUpdater } from "electron-updater";
 import icon from "../../resources/icon.png?asset";
@@ -18,6 +18,7 @@ import type { Attachment } from "../shared/attachments";
 import { stageAttachment, clearStagedAttachments } from "./attachment-staging";
 import { discoverProviderModels } from "./model-discovery";
 import { readMediaAsDataUrl, saveMedia, mediaFileExists } from "./media";
+import { openTerminalInDirectory } from "./terminal-launcher";
 import {
   checkInstallStatus,
   verifyInstall,
@@ -34,11 +35,20 @@ import {
   runHermesBackup,
   runHermesImport,
   runHermesDump,
-  listMcpServers,
   discoverMemoryProviders,
   readLogs,
   InstallProgress,
 } from "./installer";
+import {
+  addMcpServer,
+  installMcpCatalogEntry,
+  listMcpCatalog,
+  listMcpServers,
+  removeMcpServer,
+  setMcpServerEnabled,
+  testMcpServer,
+  type McpServerInput,
+} from "./mcp-servers";
 import { updaterLogger } from "./updater-log";
 import {
   runHermesAuthLogin,
@@ -51,6 +61,7 @@ import {
   sendMessage,
   transcribeAudio,
   startGateway,
+  startGatewayDetailed,
   stopGateway,
   isGatewayRunning,
   testRemoteConnection,
@@ -138,7 +149,12 @@ import {
   writeUserProfile,
 } from "./memory";
 import { readSoul, writeSoul, resetSoul } from "./soul";
-import { getToolsets, setToolsetEnabled } from "./tools";
+import {
+  getPlatformToolsets,
+  getToolsets,
+  setMessagingPlatformToolsetEnabled,
+  setToolsetEnabled,
+} from "./tools";
 import {
   fetchRegistry,
   fetchRegistryDetail,
@@ -162,6 +178,15 @@ import {
   resumeCronJob,
   triggerCronJob,
 } from "./cronjobs";
+import {
+  applyMessagingPlatformUpdate,
+  buildDesktopMessagingPlatforms,
+  fetchRemoteMessagingPlatforms,
+  readLocalGatewayPlatformStates,
+  testDesktopMessagingPlatform,
+  testRemoteMessagingPlatform,
+  updateRemoteMessagingPlatform,
+} from "./messaging-platforms";
 import {
   listBoards as kanbanListBoards,
   currentBoard as kanbanCurrentBoard,
@@ -207,7 +232,9 @@ import {
   sshWriteSoul,
   sshResetSoul,
   sshGetToolsets,
+  sshGetPlatformToolsets,
   sshSetToolsetEnabled,
+  sshSetMessagingPlatformToolsetEnabled,
   sshReadEnv,
   sshSetEnvValue,
   sshGetConfigValue,
@@ -936,6 +963,9 @@ function setupIPC(): void {
           onToolProgress: (tool) => {
             safeSend("chat-tool-progress", tool);
           },
+          onToolEvent: (toolEvent) => {
+            safeSend("chat-tool-event", toolEvent);
+          },
           onUsage: (usage) => {
             safeSend("chat-usage", usage);
           },
@@ -1051,15 +1081,20 @@ function setupIPC(): void {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStartGateway(conn.ssh);
-      return true;
+      return { success: true, running: true };
     }
     if (conn.mode === "remote") {
       // The remote server runs its own gateway; nothing to start locally.
       // Without this guard we'd fall through to `startGateway()` and
       // spawn a non-existent local hermes-agent (issue #266).
-      return false;
+      return {
+        success: false,
+        running: false,
+        error:
+          "Remote mode points at an already-running Hermes server. Start or restart the gateway on that remote host.",
+      };
     }
-    return startGateway();
+    return startGatewayDetailed();
   });
   ipcMain.handle("stop-gateway", async () => {
     const conn = getConnectionConfig();
@@ -1103,6 +1138,118 @@ function setupIPC(): void {
         restartGateway(profile);
       }
       return true;
+    },
+  );
+
+  ipcMain.handle("get-messaging-platforms", async (_event, profile?: string) => {
+    const conn = getConnectionConfig();
+    if (conn.mode === "remote") {
+      return fetchRemoteMessagingPlatforms();
+    }
+    if (conn.mode === "ssh" && conn.ssh) {
+      const [envData, enabled, running, platformToolsets] = await Promise.all([
+        sshReadEnv(conn.ssh, profile),
+        sshGetPlatformEnabled(conn.ssh, profile),
+        sshGatewayStatus(conn.ssh),
+        sshGetPlatformToolsets(conn.ssh, profile),
+      ]);
+      return buildDesktopMessagingPlatforms(
+        envData,
+        enabled,
+        running,
+        platformToolsets,
+      );
+    }
+    const running = isGatewayRunning(profile);
+    return buildDesktopMessagingPlatforms(
+      readEnv(profile),
+      getPlatformEnabled(profile),
+      running,
+      getPlatformToolsets(profile),
+      readLocalGatewayPlatformStates(profile, running),
+    );
+  });
+
+  ipcMain.handle(
+    "update-messaging-platform",
+    async (_event, platform: string, update, profile?: string) => {
+      const conn = getConnectionConfig();
+      if (conn.mode === "remote") {
+        return updateRemoteMessagingPlatform(platform, update);
+      }
+      if (conn.mode === "ssh" && conn.ssh) {
+        await applyMessagingPlatformUpdate(
+          platform,
+          update,
+          (key, value) => sshSetEnvValue(conn.ssh!, key, value, profile),
+          (key, enabled) =>
+            sshSetPlatformEnabled(conn.ssh!, key, enabled, profile),
+          (platformKey, toolsetKey, enabled) =>
+            sshSetMessagingPlatformToolsetEnabled(
+              conn.ssh!,
+              platformKey,
+              toolsetKey,
+              enabled,
+              profile,
+            ),
+        );
+        return { ok: true, platform };
+      }
+      await applyMessagingPlatformUpdate(
+        platform,
+        update,
+        (key, value) => setEnvValue(key, value, profile),
+        (key, enabled) => setPlatformEnabled(key, enabled, profile),
+        (platformKey, toolsetKey, enabled) =>
+          setMessagingPlatformToolsetEnabled(
+            platformKey,
+            toolsetKey,
+            enabled,
+            profile,
+          ),
+      );
+      if (isGatewayRunning(profile)) {
+        restartGateway(profile);
+      }
+      return { ok: true, platform };
+    },
+  );
+
+  ipcMain.handle(
+    "test-messaging-platform",
+    async (_event, platform: string, profile?: string) => {
+      const conn = getConnectionConfig();
+      if (conn.mode === "remote") {
+        return testRemoteMessagingPlatform(platform);
+      }
+      if (conn.mode === "ssh" && conn.ssh) {
+        const [envData, enabled, running, platformToolsets] = await Promise.all([
+          sshReadEnv(conn.ssh, profile),
+          sshGetPlatformEnabled(conn.ssh, profile),
+          sshGatewayStatus(conn.ssh),
+          sshGetPlatformToolsets(conn.ssh, profile),
+        ]);
+        return testDesktopMessagingPlatform(
+          platform,
+          buildDesktopMessagingPlatforms(
+            envData,
+            enabled,
+            running,
+            platformToolsets,
+          ),
+        );
+      }
+      const running = isGatewayRunning(profile);
+      return testDesktopMessagingPlatform(
+        platform,
+        buildDesktopMessagingPlatforms(
+          readEnv(profile),
+          getPlatformEnabled(profile),
+          running,
+          getPlatformToolsets(profile),
+          readLocalGatewayPlatformStates(profile, running),
+        ),
+      );
     },
   );
 
@@ -1586,6 +1733,19 @@ function setupIPC(): void {
     }
   });
 
+  ipcMain.handle("open-terminal", async (_event, dirPath: string) => {
+    if (isRemoteOnlyMode()) return false;
+    if (typeof dirPath !== "string" || dirPath.trim().length === 0)
+      return false;
+    try {
+      const info = await stat(dirPath);
+      if (!info.isDirectory()) return false;
+      return await openTerminalInDirectory(dirPath);
+    } catch {
+      return false;
+    }
+  });
+
   // Read image file as data URL for preview
   ipcMain.handle(
     "read-image-file",
@@ -1690,6 +1850,30 @@ function setupIPC(): void {
   // MCP servers
   ipcMain.handle("list-mcp-servers", (_event, profile?: string) =>
     listMcpServers(profile),
+  );
+  ipcMain.handle(
+    "add-mcp-server",
+    (_event, input: McpServerInput, profile?: string) =>
+      addMcpServer(input, profile),
+  );
+  ipcMain.handle("remove-mcp-server", (_event, name: string, profile?: string) =>
+    removeMcpServer(name, profile),
+  );
+  ipcMain.handle(
+    "set-mcp-server-enabled",
+    (_event, name: string, enabled: boolean, profile?: string) =>
+      setMcpServerEnabled(name, enabled, profile),
+  );
+  ipcMain.handle("test-mcp-server", (_event, name: string, profile?: string) =>
+    testMcpServer(name, profile),
+  );
+  ipcMain.handle("list-mcp-catalog", (_event, profile?: string) =>
+    listMcpCatalog(profile),
+  );
+  ipcMain.handle(
+    "install-mcp-catalog-entry",
+    (_event, name: string, env?: Record<string, string>, profile?: string) =>
+      installMcpCatalogEntry(name, env, profile),
   );
 
   // Discover marketplace (community registry)

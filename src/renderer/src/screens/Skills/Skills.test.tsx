@@ -81,6 +81,9 @@ describe("Skills.tsx — Install button (issue #310 diagnosis)", () => {
     // with the card's skill.name and the current profile (undefined here).
     expect(installSkill).toHaveBeenCalledTimes(1);
     expect(installSkill).toHaveBeenCalledWith("concept-diagram", undefined);
+    await waitFor(() => {
+      expect(listInstalledSkills).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("surfaces the CLI error in the UI when installSkill returns success:false (issue #310 fix)", async () => {
@@ -122,6 +125,9 @@ describe("Skills.tsx — Install button (issue #310 diagnosis)", () => {
     await waitFor(() => {
       const tabs = view.container.querySelectorAll(".skills-tab");
       browseTab = tabs[1] as HTMLButtonElement;
+      browseTab = view.container.querySelectorAll(
+        ".skills-tab",
+      )[1] as HTMLButtonElement | null;
       expect(browseTab).toBeTruthy();
     });
     await act(async () => {

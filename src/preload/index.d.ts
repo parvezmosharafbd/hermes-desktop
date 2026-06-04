@@ -6,6 +6,12 @@ import type {
   RegistryCatalog,
   RegistryDetail,
 } from "../shared/registry";
+import type {
+  MessagingPlatformsResponse,
+  MessagingPlatformTestResponse,
+  MessagingPlatformUpdate,
+} from "../shared/messaging-platforms";
+import type { ChatToolEvent } from "../shared/chat-stream";
 
 interface ElectronAPI {
   process: {
@@ -62,6 +68,14 @@ interface ConfigFixLogEntry {
   profile?: string;
   valueMasked?: string;
   detail?: string;
+}
+
+interface GatewayStartResult {
+  success: boolean;
+  running: boolean;
+  alreadyRunning?: boolean;
+  error?: string;
+  logPath?: string;
 }
 
 /**
@@ -342,6 +356,7 @@ interface HermesAPI {
   onChatReasoningChunk: (callback: (chunk: string) => void) => () => void;
   onChatDone: (callback: (sessionId?: string) => void) => () => void;
   onChatToolProgress: (callback: (tool: string) => void) => () => void;
+  onChatToolEvent: (callback: (event: ChatToolEvent) => void) => () => void;
   onChatUsage: (
     callback: (usage: {
       promptTokens: number;
@@ -357,7 +372,7 @@ interface HermesAPI {
   onChatError: (callback: (error: string) => void) => () => void;
 
   // Gateway
-  startGateway: () => Promise<boolean>;
+  startGateway: () => Promise<GatewayStartResult>;
   stopGateway: () => Promise<boolean>;
   gatewayStatus: () => Promise<boolean>;
 
@@ -368,6 +383,16 @@ interface HermesAPI {
     enabled: boolean,
     profile?: string,
   ) => Promise<boolean>;
+  getMessagingPlatforms: (profile?: string) => Promise<MessagingPlatformsResponse>;
+  updateMessagingPlatform: (
+    platform: string,
+    update: MessagingPlatformUpdate,
+    profile?: string,
+  ) => Promise<{ ok: boolean; platform: string }>;
+  testMessagingPlatform: (
+    platform: string,
+    profile?: string,
+  ) => Promise<MessagingPlatformTestResponse>;
 
   // Sessions
   listSessions: (
@@ -761,6 +786,7 @@ interface HermesAPI {
     maxBytes?: number,
   ) => Promise<{ content: string; truncated: boolean } | null>;
   openFileInEditor: (filePath: string) => Promise<boolean>;
+  openTerminal: (dirPath: string) => Promise<boolean>;
   readImageFile: (filePath: string) => Promise<string | null>;
   kanbanAssignTask: (
     taskId: string,
@@ -839,8 +865,74 @@ interface HermesAPI {
   listMcpServers: (
     profile?: string,
   ) => Promise<
-    Array<{ name: string; type: string; enabled: boolean; detail: string }>
+    Array<{
+      name: string;
+      type: "http" | "stdio" | "unknown";
+      transport: "http" | "stdio" | "unknown";
+      enabled: boolean;
+      detail: string;
+      url?: string;
+      command?: string;
+      args: string[];
+      env: Record<string, string>;
+      auth?: string;
+      tools?: unknown;
+    }>
   >;
+  addMcpServer: (
+    input: {
+      name: string;
+      type: "http" | "stdio";
+      url?: string;
+      command?: string;
+      args?: string[];
+      env?: Record<string, string>;
+      auth?: string;
+    },
+    profile?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  removeMcpServer: (
+    name: string,
+    profile?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  setMcpServerEnabled: (
+    name: string,
+    enabled: boolean,
+    profile?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  testMcpServer: (
+    name: string,
+    profile?: string,
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+    tools?: Array<{ name: string; description: string }>;
+  }>;
+  listMcpCatalog: (profile?: string) => Promise<{
+    entries: Array<{
+      name: string;
+      description: string;
+      source: string;
+      transport: "http" | "stdio" | "unknown";
+      authType: string;
+      requiredEnv: Array<{ name: string; prompt: string; required: boolean }>;
+      needsInstall: boolean;
+      installed: boolean;
+      enabled: boolean;
+    }>;
+    diagnostics: unknown[];
+    error?: string;
+  }>;
+  installMcpCatalogEntry: (
+    name: string,
+    env?: Record<string, string>,
+    profile?: string,
+  ) => Promise<{
+    success: boolean;
+    error?: string;
+    background?: boolean;
+    action?: string;
+  }>;
 
   // Discover marketplace (community registry)
   fetchRegistry: (
