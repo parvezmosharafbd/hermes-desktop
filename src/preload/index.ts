@@ -342,7 +342,7 @@ const hermesAPI = {
     profile?: string,
   ): Promise<{
     models: string[];
-    status: "ok" | "no-key" | "unsupported" | "unknown-host";
+    status: "ok" | "no-key" | "error" | "unsupported" | "unknown-host";
     cached: boolean;
     /** Subset of `models` flagged as free per the provider catalog
      *  (Nous Portal today). Optional — providers without pricing
@@ -464,6 +464,8 @@ const hermesAPI = {
   startGateway: (): Promise<GatewayStartResult> =>
     ipcRenderer.invoke("start-gateway"),
   stopGateway: (): Promise<boolean> => ipcRenderer.invoke("stop-gateway"),
+  restartGateway: (profile?: string): Promise<boolean> =>
+    ipcRenderer.invoke("restart-gateway", profile),
   gatewayStatus: (): Promise<boolean> => ipcRenderer.invoke("gateway-status"),
 
   // Platform toggles

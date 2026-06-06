@@ -16,8 +16,15 @@ import type { AppUpdater } from "electron-updater";
 import icon from "../../resources/icon.png?asset";
 import type { Attachment } from "../shared/attachments";
 import { stageAttachment, clearStagedAttachments } from "./attachment-staging";
+import { persistPromptImageAttachments } from "./session-attachment-store";
 import { discoverProviderModels } from "./model-discovery";
-import { readMediaAsDataUrl, saveMedia, mediaFileExists } from "./media";
+import {
+  cleanupTempMediaFiles,
+  materializeDataUrlToTemp,
+  readMediaAsDataUrl,
+  saveMedia,
+  mediaFileExists,
+} from "./media";
 import { openTerminalInDirectory } from "./terminal-launcher";
 import {
   checkInstallStatus,
@@ -93,6 +100,7 @@ import {
   getClaw3dPort,
   setClaw3dWsUrl,
   getClaw3dWsUrl,
+  waitForClaw3dReady,
   Claw3dSetupProgress,
 } from "./claw3d";
 import { startOfficeStack } from "./office-start";
@@ -930,6 +938,11 @@ function setupIPC(): void {
           },
           onDone: (sessionId) => {
             currentChatAbort = null;
+            try {
+              persistPromptImageAttachments(sessionId, message, attachments);
+            } catch (err) {
+              console.warn("[sessions] Failed to persist prompt image attachments:", err);
+            }
             safeSend("chat-done", sessionId || "");
             resolveChat({ response: fullResponse, sessionId });
             // Desktop notification when window is not focused and response took >10s
@@ -943,7 +956,7 @@ function setupIPC(): void {
                 .trim()
                 .slice(0, 80);
               new Notification({
-                title: "Hermes Agent",
+                title: "Hermes One",
                 body: preview || "Response ready",
               }).show();
             }
@@ -955,7 +968,7 @@ function setupIPC(): void {
             // Notify on error too if window not focused
             if (mainWindow && !mainWindow.isFocused()) {
               new Notification({
-                title: "Hermes Agent — Error",
+                title: "Hermes One — Error",
                 body: error.slice(0, 100),
               }).show();
             }
@@ -1024,23 +1037,21 @@ function setupIPC(): void {
       const isUrl = /^https?:\/\//i.test(src);
       const isData = src.startsWith("data:");
       const template: Electron.MenuItemConstructorOptions[] = [];
-      // "Open" needs a real target — a local file or a web URL. A data:
-      // URL is inline bytes with nothing to hand to the OS, so it is
-      // save-only.
-      if (!isData) {
-        template.push({
-          label: labels.open,
-          click: () => {
-            if (isUrl) {
-              openExternalUrl(src);
-            } else {
-              shell.openPath(src).then((err) => {
-                if (err) console.error("[media] open failed:", err);
-              });
-            }
-          },
-        });
-      }
+      template.push({
+        label: labels.open,
+        click: () => {
+          if (isUrl) {
+            openExternalUrl(src);
+            return;
+          }
+
+          const target = isData ? materializeDataUrlToTemp(src, name) : src;
+          if (!target) return;
+          shell.openPath(target).then((err) => {
+            if (err) console.error("[media] open failed:", err);
+          });
+        },
+      });
       template.push({
         label: labels.saveAs,
         click: () => {
@@ -1110,6 +1121,18 @@ function setupIPC(): void {
     // other profiles' gateways running.
     stopGateway(undefined, true);
     return true;
+  });
+  ipcMain.handle("restart-gateway", async (_event, profile?: string) => {
+    const conn = getConnectionConfig();
+    if (conn.mode === "ssh" && conn.ssh) {
+      await sshStopGateway(conn.ssh);
+      await sshStartGateway(conn.ssh);
+      return sshGatewayStatus(conn.ssh);
+    }
+    if (conn.mode === "remote") {
+      return false;
+    }
+    return restartGateway(profile);
   });
   ipcMain.handle("gateway-status", () => {
     const conn = getConnectionConfig();
@@ -1568,9 +1591,12 @@ function setupIPC(): void {
       sshGatewayStatus,
       sshStartGateway,
       startSshTunnel,
+      stopSshTunnel,
       sshReadRemoteApiKey,
       setSshRemoteApiKey,
       startClaw3dAll,
+      stopClaw3dAll: stopClaw3d,
+      waitForClaw3dReady,
     }),
   );
   ipcMain.handle("claw3d-stop-all", () => {
@@ -2115,8 +2141,9 @@ if (process.env.ENABLE_CDP === "1") {
 }
 
 app.whenReady().then(() => {
-  app.name = "Hermes";
+  app.setName("Hermes One");
   electronApp.setAppUserModelId("com.nousresearch.hermes");
+  cleanupTempMediaFiles();
 
   // Allow microphone access for the app's own renderer (voice input). Without
   // a handler Electron denies getUserMedia by default. Scoped to the `media`
@@ -2178,6 +2205,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  cleanupTempMediaFiles();
   stopHealthPolling();
   if (currentChatAbort) {
     currentChatAbort();

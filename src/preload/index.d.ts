@@ -347,7 +347,7 @@ interface HermesAPI {
     profile?: string,
   ) => Promise<{
     models: string[];
-    status: "ok" | "no-key" | "unsupported" | "unknown-host";
+    status: "ok" | "no-key" | "error" | "unsupported" | "unknown-host";
     cached: boolean;
     /** Subset of `models` flagged as free (Nous Portal today). #367. */
     freeModels?: string[];
@@ -374,6 +374,7 @@ interface HermesAPI {
   // Gateway
   startGateway: () => Promise<GatewayStartResult>;
   stopGateway: () => Promise<boolean>;
+  restartGateway: (profile?: string) => Promise<boolean>;
   gatewayStatus: () => Promise<boolean>;
 
   // Platform toggles

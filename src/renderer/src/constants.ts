@@ -30,6 +30,7 @@ export const PROVIDERS = {
     { value: "openai-codex", label: "constants.openaiCodexName" },
     { value: "google", label: "constants.googleName" },
     { value: "xai", label: "constants.xaiName" },
+    { value: "xiaomi", label: "Xiaomi MiMo" },
     { value: "mistral", label: "Mistral" },
     { value: "deepseek", label: "DeepSeek" },
     { value: "groq", label: "Groq" },
@@ -43,6 +44,14 @@ export const PROVIDERS = {
     { value: "qwen", label: "Qwen" },
     { value: "minimax", label: "MiniMax" },
     { value: "nous", label: "constants.nousName" },
+    // Local OpenAI-compatible servers. Keep these explicit so users
+    // looking for "Ollama" or "LM Studio" do not have to discover the
+    // generic custom-provider path first.
+    { value: "lmstudio", label: "constants.lmstudio" },
+    { value: "atomicchat", label: "constants.atomicchat" },
+    { value: "ollama", label: "constants.ollama" },
+    { value: "vllm", label: "constants.vllm" },
+    { value: "llamacpp", label: "constants.llamacpp" },
     // Subscription / OAuth plans
     // openai-codex is listed once above (first-party group) via #102 —
     // not repeated here to avoid a duplicate <option> value.
@@ -62,6 +71,7 @@ export const PROVIDERS = {
     "openai-codex": "constants.openaiCodexName",
     google: "constants.googleName",
     xai: "constants.xaiName",
+    xiaomi: "Xiaomi MiMo",
     mistral: "Mistral",
     deepseek: "DeepSeek",
     groq: "Groq",
@@ -75,6 +85,11 @@ export const PROVIDERS = {
     qwen: "Qwen",
     minimax: "MiniMax",
     nous: "constants.nousName",
+    lmstudio: "constants.lmstudio",
+    atomicchat: "constants.atomicchat",
+    ollama: "constants.ollama",
+    vllm: "constants.vllm",
+    llamacpp: "constants.llamacpp",
     "xai-oauth": "xAI Grok (OAuth)",
     "qwen-oauth": "Qwen (OAuth)",
     "google-gemini-cli": "Gemini (CLI OAuth)",
@@ -159,6 +174,18 @@ export const PROVIDERS = {
       placeholder: "xai-...",
       configProvider: "xai",
       baseUrl: "",
+      needsKey: true,
+    },
+    {
+      id: "xiaomi",
+      name: "Xiaomi MiMo",
+      desc: "MiMo models",
+      tag: "",
+      envKey: "XIAOMI_API_KEY",
+      url: "https://platform.xiaomimimo.com",
+      placeholder: "sk-...",
+      configProvider: "xiaomi",
+      baseUrl: "https://api.xiaomimimo.com/v1",
       needsKey: true,
     },
     {
@@ -533,6 +560,12 @@ export const SETTINGS_SECTIONS: SectionDef[] = [
         label: "constants.xaiApiKey",
         type: "password",
         hint: "constants.xaiHint",
+      },
+      {
+        key: "XIAOMI_API_KEY",
+        label: "constants.xiaomiApiKey",
+        type: "password",
+        hint: "constants.xiaomiHint",
       },
     ],
   },

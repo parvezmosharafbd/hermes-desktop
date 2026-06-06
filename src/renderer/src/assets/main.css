@@ -1,5 +1,5 @@
 /* ========================================================================
-   Hermes Agent Desktop — Clean Design System
+   Hermes One Desktop — Clean Design System
    Dark + Light mode, no gradients, flat design
    ======================================================================== */
 
@@ -461,8 +461,7 @@
   --radius-xl: 20px;
   --transition: 150ms ease;
   --font-sans:
-    "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
+    "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono:
     "SF Mono", "Fira Code", "JetBrains Mono", Menlo, Consolas, monospace;
 }
@@ -1360,12 +1359,12 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 11px 14px;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+
   color: var(--text-secondary);
   border: none;
   background: none;
@@ -5880,13 +5879,20 @@ body {
 /* Sessions list */
 .sessions-list {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 4px 16px 16px;
 }
 
 /* Date group headings */
 .sessions-group {
-  margin-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
 .sessions-group-label {
@@ -5904,6 +5910,7 @@ body {
   flex-direction: column;
   gap: 6px;
   width: 100%;
+  box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid var(--border);
   background: var(--bg-secondary);
@@ -6685,6 +6692,8 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   transition: border-color var(--transition);
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .discover-card:hover {
@@ -8959,14 +8968,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   background: #000;
 }
 
 .splash-bg {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  height: auto;
+  min-width: 100%;
+  min-height: 100%;
+  transform: translate(-50%, -50%);
   object-fit: cover;
 }
 
@@ -8977,6 +8991,19 @@ body {
   max-width: 60%;
   opacity: 0;
   animation: splashFadeIn 1.1s ease-out forwards;
+}
+
+.splash-status {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  animation: splashFadeIn 0.6s ease-out forwards;
 }
 
 @keyframes splashFadeIn {
