@@ -46,7 +46,7 @@
     "three": "^0.183.2",
     "troika-three-text": "^0.52.4",
     "vscode-material-icons": "^0.1.1",
-    "ws": "^8.20.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -76,7 +76,7 @@
     "react-dom": "^19.2.1",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
-    "vite": "^7.3.2",
+    "vite": "^7.3.3",
     "vitest": "^4.1.4"
   }
 }
